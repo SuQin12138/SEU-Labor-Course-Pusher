@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  东南大学劳动教育选课神器！实时监控新增课程并微信推送，打开浏览器就会后台自动运行，无需频繁登录查询即可获取所在校区的最新劳动教育实践课程信息
-// @author       zz6zz666@github, Qwen
+// @author       zz6zz666@github with AI support
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
