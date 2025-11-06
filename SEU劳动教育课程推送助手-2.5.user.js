@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_openInTab
 // @run-at       document-end
+// @connect      www.pushplus.plus
 // @downloadURL  https://update.greasyfork.org/scripts/554904/SEU%E5%8A%B3%E5%8A%A8%E6%95%99%E8%82%B2%E8%AF%BE%E7%A8%8B%E6%8E%A8%E9%80%81%E5%8A%A9%E6%89%8B.user.js
 // @updateURL    https://update.greasyfork.org/scripts/554904/SEU%E5%8A%B3%E5%8A%A8%E6%95%99%E8%82%B2%E8%AF%BE%E7%A8%8B%E6%8E%A8%E9%80%81%E5%8A%A9%E6%89%8B.meta.js
 // ==/UserScript==
