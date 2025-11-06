@@ -20,7 +20,7 @@
 
     // ==================== 全局配置区（用户可自定义）====================
     // 【后台页面活性维持配置】
-    const COOLDOWN = 180 * 1000;        // 冷却时间（单位：毫秒）
+    const COOLDOWN = 90 * 1000;        // 冷却时间（单位：毫秒）
     const HEARTBEAT_INTERVAL = 15 * 1000;   // 心跳间隔
     const CHECK_INTERVAL = 60 * 1000;       // 检查间隔
     const HEARTBEAT_URL = 'https://labor.seu.edu.cn/favicon.ico'; // 用于心跳的轻量资源
