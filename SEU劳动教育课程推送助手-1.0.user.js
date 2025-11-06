@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SEU劳动教育课程推送助手
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @license      MIT
 // @description  东南大学劳动教育选课神器！实时监控新增课程并微信推送，打开浏览器就会后台自动运行，无需频繁登录查询即可获取所在校区的最新劳动教育实践课程信息
 // @author       zz6zz666@github with AI support
@@ -96,6 +96,10 @@
      * 非目标页面检查逻辑（定时判断是否创建新标签页）
      */
     function handleNonTargetPage() {
+        if (shouldDisableLogin) {
+            console.log('[页面活性] 登录失败冷却期内，暂不创建新标签页');
+            return;
+        }
         function checkAndCreate() {
             const lastActive = GM_getValue('lastTargetActive', 0);
             const now = Date.now();
