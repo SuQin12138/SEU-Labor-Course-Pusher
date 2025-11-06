@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         SEU劳动教育课程推送助手
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @license      MIT
-// @description  东南大学劳动教育选课神器！实时监控新增课程并微信推送，移动端后台稳定运行
+// @description  东南大学劳动教育选课神器！实时监控新增课程并微信推送，移动端后台稳定运行，当然你也可以选择在电脑上安装
 // @author       zz6zz666@github with AI support
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
@@ -132,7 +132,7 @@
     }
 
     /**
-     * 非目标页面检查逻辑（保持不变）
+     * 非目标页面检查逻辑
      */
     function handleNonTargetPage() {
         if (shouldDisableLogin) {
@@ -167,7 +167,7 @@
     }
     // ==============================================================
 
-    // ==================== 自动登录与选课跳转逻辑（保持不变）====================
+    // ==================== 自动登录与选课跳转逻辑 ====================
     function handleLoginPage() {
         if (shouldDisableLogin()) {
             const lastFailTime = new Date(GM_getValue('loginFailTime', 0)).toLocaleString();
@@ -271,7 +271,7 @@
     }
     // ==============================================================
 
-    // ==================== 课程监控与推送逻辑（保持不变）====================
+    // ==================== 课程监控与推送逻辑 ====================
     function getWeekday(dateStr) {
         if (!dateStr) return '';
         const dateMatch = dateStr.match(/\d{4}-\d{2}-\d{2}/);
@@ -385,10 +385,14 @@
     // ==============================================================
 
     // ==================== 主流程分发 ====================
-    if (currentUrl.includes('auth.seu.edu.cn/dist')) {
+    if (currentUrl === "https://labor.seu.edu.cn/AuthServer/Login") {
+        // 旧登录页重定向到统一身份认证页
+        console.log('[登录重定向] 检测到旧登录页，跳转至统一身份认证...');
+        window.location.href = LOGIN_LABOR_URL;
+    } else if (currentUrl.includes('auth.seu.edu.cn/dist')) {
         handleLoginPage();
     } else if (/^https:\/\/labor\.seu\.edu\.cn\/System\/Home/.test(currentUrl)) {
-        handleLaborHomePage();
+        handleLaborHomePage(); 
     } else if (currentUrl.includes('labor.seu.edu.cn/SJItemKaiKe/XuanKe/Index')) {
         handleCoursePage();
     }
