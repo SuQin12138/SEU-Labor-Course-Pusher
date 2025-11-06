@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SEU劳动教育课程推送助手
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      2.0
 // @license      MIT
 // @description  东南大学劳动教育选课神器！实时监控新增课程并微信推送，打开浏览器就会后台自动运行，无需频繁登录查询即可获取所在校区的最新劳动教育实践课程信息
 // @author       zz6zz666@github with AI support
@@ -83,6 +83,10 @@
      * 目标页面报活逻辑（持续更新最后活跃时间）
      */
     function handleTargetPage() {
+        if (shouldDisableLogin) {
+            console.log('[页面活性] 登录失败冷却期内，暂不创建新标签页');
+            return;
+        }
         function updateLastActive() {
             const now = Date.now();
             GM_setValue('lastTargetActive', now);
@@ -96,10 +100,6 @@
      * 非目标页面检查逻辑（定时判断是否创建新标签页）
      */
     function handleNonTargetPage() {
-        if (shouldDisableLogin) {
-            console.log('[页面活性] 登录失败冷却期内，暂不创建新标签页');
-            return;
-        }
         function checkAndCreate() {
             const lastActive = GM_getValue('lastTargetActive', 0);
             const now = Date.now();
@@ -137,9 +137,9 @@
             console.log(`[自动登录] 登录失败后禁用期内（上次失败时间：${lastFailTime}），暂不执行自动登录`);
             return;
         }
-
+    
         console.log('[自动登录] 检测到登录页，开始自动登录...');
-
+    
         let loginSuccess = false;
         const loginTimer = setTimeout(() => {
             if (!loginSuccess) {
@@ -147,10 +147,10 @@
                 GM_setValue('loginFailStatus', true);
                 GM_setValue('loginFailTime', Date.now());
                 pushToWechat('课程推送登录失效提醒',
-            `## 统一身份认证登录超时\n\n⚠️ 登录尝试超过${LOGIN_TIMEOUT/1000}秒未跳转，可能是以下原因：\n1. 需要短信验证码\n2. 账号密码错误\n3. 系统临时故障\n\n请手动登录检查状态\n时间：${new Date().toLocaleString()}`);
+                `## 统一身份认证登录超时\n\n⚠️ 登录尝试超过${LOGIN_TIMEOUT/1000}秒未跳转，可能是以下原因：\n1. 需要短信验证码\n2. 账号密码错误\n3. 系统临时故障\n\n请手动登录检查状态\n时间：${new Date().toLocaleString()}`);
             }
         }, LOGIN_TIMEOUT);
-
+    
         // 监听页面跳转判断登录成功
         const originalPushState = history.pushState;
         history.pushState = function(...args) {
@@ -158,31 +158,37 @@
             clearTimeout(loginTimer);
             return originalPushState.apply(this, args);
         };
-
+    
         window.addEventListener('beforeunload', () => {
             loginSuccess = true;
             clearTimeout(loginTimer);
         });
-
+    
         // 等待登录元素加载
         const waitForElements = () => {
-            const usernameInput = document.querySelector('input.input-username-pc[type="text"]') ||
-                                  document.querySelector('input[type="text"][placeholder*="学号"]');
-
-            const passwordInput = document.querySelector('input[type="password"]') ||
-                                  document.querySelector('input.input-password-pc');
-
-            const loginButton = document.querySelector('button.login-button-pc') ||
-                                document.querySelector('button[type="button"]');
-
+            // ---------- 适配PC和移动端的用户名输入框 ----------
+            const usernameInput = document.querySelector('input.input-username-pc[type="text"]') || // PC端类名
+                                  document.querySelector('input.input-username-mobile[type="text"]') || // 移动端类名
+                                  document.querySelector('input[type="text"][placeholder*="一卡通号"], input[type="text"][placeholder*="学号"]'); // 通用placeholder匹配
+    
+            // ---------- 适配PC和移动端的密码输入框 ----------
+            const passwordInput = document.querySelector('input[type="password"]') || // 原生password类型
+                                  document.querySelector('input.input-password-pc') || // PC端类名
+                                  document.querySelector('input.input-password-mobile input.ant-input'); // 移动端嵌套结构
+    
+            // ---------- 适配PC和移动端的登录按钮 ----------
+            const loginButton = document.querySelector('button.login-button-pc') || // PC端类名
+                                document.querySelector('button[type="button"].ant-btn-primary') || // 移动端通用主按钮
+                                document.querySelector('button[type="button"]'); // 兜底匹配
+    
             if (!usernameInput || !passwordInput || !loginButton) {
                 console.log('[自动登录] 元素未找到，500ms 后重试...');
                 setTimeout(waitForElements, 500);
                 return;
             }
-
+    
             console.log('[自动登录] 找到输入框，等待 3 秒后输入信息...');
-
+    
             setTimeout(() => {
                 // 强制设置输入值（兼容React等框架）
                 const forceSetValue = (input, value) => {
@@ -194,10 +200,10 @@
                     if (tracker) tracker.setValue(lastValue);
                     input.dispatchEvent(event);
                 };
-
+    
                 forceSetValue(usernameInput, USERNAME);
                 forceSetValue(passwordInput, PASSWORD);
-
+    
                 setTimeout(() => {
                     if (!loginButton.disabled) {
                         console.log('[自动登录] 点击登录按钮...');
@@ -209,7 +215,7 @@
                 }, 500);
             }, 3000);
         };
-
+    
         setTimeout(waitForElements, 1000);
     }
 
