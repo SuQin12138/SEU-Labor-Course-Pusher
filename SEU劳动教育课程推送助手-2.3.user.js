@@ -62,9 +62,15 @@
     }
 
     function shouldDisableLogin() {
+        const isLoginFailed = GM_getValue('loginFailStatus', true);
+        if (!isLoginFailed) {
+            return false;
+        }
+        
+        // 有失败标志时，再判断是否在冷却期内
         const lastFailTime = GM_getValue('loginFailTime', 0);
         const now = Date.now();
-        return lastFailTime > 0 && (now - lastFailTime) < LOGIN_DISABLE_DURATION;
+        return (now - lastFailTime) < LOGIN_DISABLE_DURATION;
     }
     // =================================================
 
@@ -135,7 +141,7 @@
      * 非目标页面检查逻辑
      */
     function handleNonTargetPage() {
-        if (shouldDisableLogin) {
+        if (shouldDisableLogin()) {
             console.log('[页面活性] 登录失败冷却期内，暂不创建新标签页');
             return;
         }
@@ -168,6 +174,7 @@
     // ==============================================================
 
     // ==================== 自动登录与选课跳转逻辑 ====================
+    let loginTimer = null;
     function handleLoginPage() {
         if (shouldDisableLogin()) {
             const lastFailTime = new Date(GM_getValue('loginFailTime', 0)).toLocaleString();
@@ -178,13 +185,26 @@
         console.log('[自动登录] 检测到登录页，开始自动登录...');
 
         let loginSuccess = false;
-        const loginTimer = setTimeout(() => {
+
+        if (loginTimer) {
+            clearTimeout(loginTimer);
+            loginTimer = null;
+        }
+        loginTimer = setTimeout(() => {
+            // 超时后先检测是否停留在登录成功哈希页
+            if (window.location.hash === '#/dist/LoginSuccess') {
+                loginSuccess = true;
+                GM_setValue('loginFailStatus', false);
+                GM_setValue('loginFailTime', 0);
+                console.log('%c[登录成功] 检测到登录成功页，未超时', 'color: green; font-weight: bold');
+            }
+
             if (!loginSuccess) {
-                console.error('[自动登录] 登录超时，未检测到跳转');
+                console.error('[自动登录] 登录超时，未检测到跳转或成功页');
                 GM_setValue('loginFailStatus', true);
                 GM_setValue('loginFailTime', Date.now());
                 pushToWechat('课程推送登录失效提醒',
-                `## 统一身份认证登录超时\n\n⚠️ 登录尝试超过${LOGIN_TIMEOUT/1000}秒未跳转，可能是以下原因：\n1. 需要短信验证码\n2. 账号密码错误\n3. 系统临时故障\n\n请手动登录检查状态\n时间：${new Date().toLocaleString()}`);
+                             `## 统一身份认证登录超时\n\n⚠️ 登录尝试超过${LOGIN_TIMEOUT/1000}秒未跳转，可能是以下原因：\n1. 需要短信验证码\n2. 账号密码错误\n3. 系统临时故障\n\n请手动登录检查状态\n时间：${new Date().toLocaleString()}`);
             }
         }, LOGIN_TIMEOUT);
 
@@ -193,12 +213,14 @@
         history.pushState = function(...args) {
             loginSuccess = true;
             clearTimeout(loginTimer);
+            loginTimer = null;
             return originalPushState.apply(this, args);
         };
 
         window.addEventListener('beforeunload', () => {
             loginSuccess = true;
             clearTimeout(loginTimer);
+            loginTimer = null;
         });
 
         // 等待登录元素加载
@@ -385,16 +407,40 @@
     // ==============================================================
 
     // ==================== 主流程分发 ====================
-    if (currentUrl === "https://labor.seu.edu.cn/AuthServer/Login") {
-        // 旧登录页重定向到统一身份认证页
-        console.log('[登录重定向] 检测到旧登录页，跳转至统一身份认证...');
-        window.location.href = LOGIN_LABOR_URL;
-    } else if (currentUrl.includes('auth.seu.edu.cn/dist')) {
-        handleLoginPage();
-    } else if (/^https:\/\/labor\.seu\.edu\.cn\/System\/Home/.test(currentUrl)) {
-        handleLaborHomePage(); 
-    } else if (currentUrl.includes('labor.seu.edu.cn/SJItemKaiKe/XuanKe/Index')) {
-        handleCoursePage();
+    function handleMainLogic() {
+        const currentUrl = window.location.href;
+        if (currentUrl === "https://labor.seu.edu.cn/AuthServer/Login") {
+            console.log('[登录重定向] 检测到旧登录页，跳转至统一身份认证...');
+            window.location.href = LOGIN_LABOR_URL;
+        } else if (currentUrl.includes('auth.seu.edu.cn/dist')) {
+            if (window.location.hash === '#/dist/LoginSuccess') {
+                console.log('%c[登录成功检测] 已匹配登录成功页面哈希路径，登录冷却标志（如果有）已清除', 'color: #4CAF50; font-weight: bold');
+                clearTimeout(loginTimer);
+                loginTimer = null;
+                GM_setValue('loginFailStatus', false);
+                GM_setValue('loginFailTime', 0);
+            } else {
+                handleLoginPage();
+            }
+        } else if (/^https:\/\/labor\.seu\.edu\.cn\/System\/Home/.test(currentUrl)) {
+            handleLaborHomePage();
+        } else if (currentUrl.includes('labor.seu.edu.cn/SJItemKaiKe/XuanKe/Index')) {
+            handleCoursePage();
+        }
     }
+
+    // 初始加载时执行一次
+    handleMainLogic();
+
+    // 监听 hash 变化（前端路由切换时触发），重新执行主流程
+    window.addEventListener('hashchange', () => {
+        // 6. 当hash从LoginSuccess切换到登录页时，清除计时器
+        if (!window.location.hash.includes('LoginSuccess') && loginTimer) {
+            clearTimeout(loginTimer);
+            loginTimer = null;
+            console.log('[hash变化] 检测到离开登录成功页，已清除计时器');
+        }
+        handleMainLogic();
+    });
     // ====================================================
 })();
