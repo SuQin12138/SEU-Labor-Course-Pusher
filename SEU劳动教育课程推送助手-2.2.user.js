@@ -160,7 +160,7 @@
     }
 
     // 启动活性维持逻辑
-    if (currentUrl.includes('labor.seu.edu.cn') || currentUrl.includes('auth.seu.edu.cn/dist')) {
+    if (currentUrl.includes('labor.seu.edu.cn')) {
         handleTargetPage();
     } else {
         handleNonTargetPage();
