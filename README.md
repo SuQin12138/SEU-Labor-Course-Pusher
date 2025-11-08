@@ -28,7 +28,7 @@
 打开脚本，在 **「全局配置区」** 修改以下字段：
 
 ```js
-const USERNAME = '12345678';       // 替换为你的一卡通号（学号）
+const USERNAME = '12345678';       // 替换为你的一卡通号
 const PASSWORD = 'abc123456';      // 替换为你的统一身份认证密码
 const PUSHPLUS_TOKEN = 'ce0**********************************11'; // 替换为你的 PushPlus Token
 const LOCATION_FILTERS = [];       // 校区筛选，例如：['九龙湖校区','四牌楼校区']；留空则不过滤
