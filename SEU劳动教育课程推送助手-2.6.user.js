@@ -12,6 +12,7 @@
 // @grant        GM_openInTab
 // @run-at       document-end
 // @connect      api.telegram.org
+// @connect      qyapi.weixin.qq.com
 // @downloadURL  https://update.greasyfork.org/scripts/554904/SEU%E5%8A%B3%E5%8A%A8%E6%95%99%E8%82%B2%E8%AF%BE%E7%A8%8B%E6%8E%A8%E9%80%81%E5%8A%A9%E6%89%8B.user.js
 // @updateURL    https://update.greasyfork.org/scripts/554904/SEU%E5%8A%B3%E5%8A%A8%E6%95%99%E8%82%B2%E8%AF%BE%E7%A8%8B%E6%8E%A8%E9%80%81%E5%8A%A9%E6%89%8B.meta.js
 // ==/UserScript==
@@ -25,7 +26,11 @@
     const PASSWORD = 'abc123456';      // 替换为你的密码
     const TELEGRAM_BOT_TOKEN = '8253654589:AAF5h-ip78rBhnt4PTYDhIUQaCRkiC7ZLU4'; // Telegram Bot Token
     const TELEGRAM_CHAT_ID = '';       // 替换为你的Telegram Chat ID（通过向 @seu_laborpusher_bot 发送消息获取）
-    const PUSH_TITLE = '劳动教育课程推送'; // Telegram推送标题
+    const WECHAT_WEBHOOK_URL = '';     // 企业微信机器人Webhook地址
+    const WECHAT_CORPID = '';          // 企业微信CorpID（用于主动查询）
+    const WECHAT_CORPSECRET = '';      // 企业微信应用Secret（用于主动查询）
+    const WECHAT_AGENTID = '';         // 企业微信应用AgentID（用于主动查询）
+    const PUSH_TITLE = '劳动教育课程推送'; // 推送标题
     const LOCATION_FILTERS = [];       // 校区筛选，如['四牌楼校区', '九龙湖校区']，为空则不筛选
     const CATEGORY_FILTERS = [];       // 劳动类别筛选，如['服务劳动']，为空则不筛选（完全匹配）
     const REFRESH_INTERVAL = 3 * 60 * 1000; // 选课页自动刷新间隔（单位：毫秒）
@@ -67,6 +72,144 @@
             },
             onerror: function(error) {
                 console.error('【推送失败】', error);
+            }
+        });
+    }
+
+    function pushToWeChat(title, content) {
+        if (!WECHAT_WEBHOOK_URL) {
+            console.log('【提示】企业微信Webhook未配置，跳过企业微信推送');
+            return;
+        }
+        
+        // 格式化消息为企业微信Markdown格式
+        const message = `**${title}**\n\n${content}`;
+        
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: WECHAT_WEBHOOK_URL,
+            headers: {'Content-Type': 'application/json'},
+            data: JSON.stringify({
+                'msgtype': 'markdown',
+                'markdown': {
+                    'content': message
+                }
+            }),
+            onload: function(response) {
+                console.log('%c【企业微信推送成功】', 'color:green; font-weight:bold;');
+            },
+            onerror: function(error) {
+                console.error('【企业微信推送失败】', error);
+            }
+        });
+    }
+
+    function pushNotification(title, content) {
+        // 同时推送到Telegram和企业微信
+        pushToTelegram(title, content);
+        pushToWeChat(title, content);
+    }
+
+    function getHeartbeatStatus() {
+        const lastActive = GM_getValue('lastTargetActive', 0);
+        const now = Date.now();
+        const timeSinceLast = now - lastActive;
+        const maxInterval = HEARTBEAT_INTERVAL * 2; // 允许2个心跳间隔的延迟
+        
+        if (timeSinceLast < maxInterval) {
+            return {
+                status: '工作正常',
+                lastHeartbeat: new Date(lastActive).toLocaleString(),
+                timeSinceLastMs: timeSinceLast
+            };
+        } else {
+            return {
+                status: '异常',
+                lastHeartbeat: new Date(lastActive).toLocaleString(),
+                timeSinceLastMs: timeSinceLast
+            };
+        }
+    }
+
+    function handleWeChatQuery() {
+        // 处理企业微信主动查询
+        // 检查是否配置了企业微信应用信息
+        if (!WECHAT_CORPID || !WECHAT_CORPSECRET || !WECHAT_AGENTID) {
+            console.log('【提示】企业微信应用信息未配置，无法处理主动查询');
+            return;
+        }
+
+        // 定期检查是否有查询请求（通过GM_getValue存储）
+        const checkQueryRequest = () => {
+            const queryRequest = GM_getValue('wechat_query_request', null);
+            if (queryRequest && queryRequest.timestamp > Date.now() - 10000) {
+                // 10秒内的查询请求
+                const heartbeatStatus = getHeartbeatStatus();
+                const responseMsg = `**劳动课程推送助手状态查询**\n\n` +
+                    `状态：${heartbeatStatus.status}\n` +
+                    `上次心跳：${heartbeatStatus.lastHeartbeat}\n` +
+                    `距今：${Math.floor(heartbeatStatus.timeSinceLastMs / 1000)}秒`;
+                
+                // 发送状态回复到企业微信
+                sendWeChatMessage(responseMsg);
+                
+                // 清除查询请求
+                GM_setValue('wechat_query_request', null);
+            }
+        };
+
+        // 每5秒检查一次查询请求
+        setInterval(checkQueryRequest, 5000);
+    }
+
+    function sendWeChatMessage(content) {
+        // 获取企业微信access_token并发送消息
+        if (!WECHAT_CORPID || !WECHAT_CORPSECRET || !WECHAT_AGENTID) {
+            console.error('【错误】企业微信配置不完整');
+            return;
+        }
+
+        // 先获取access_token
+        const tokenUrl = `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${WECHAT_CORPID}&corpsecret=${WECHAT_CORPSECRET}`;
+        
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: tokenUrl,
+            onload: function(response) {
+                try {
+                    const data = JSON.parse(response.responseText);
+                    if (data.access_token) {
+                        // 使用access_token发送消息
+                        const sendUrl = `https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${data.access_token}`;
+                        
+                        GM_xmlhttpRequest({
+                            method: "POST",
+                            url: sendUrl,
+                            headers: {'Content-Type': 'application/json'},
+                            data: JSON.stringify({
+                                'touser': '@all',
+                                'msgtype': 'markdown',
+                                'agentid': WECHAT_AGENTID,
+                                'markdown': {
+                                    'content': content
+                                }
+                            }),
+                            onload: function(sendResponse) {
+                                console.log('%c【企业微信应用消息发送成功】', 'color:green; font-weight:bold;');
+                            },
+                            onerror: function(error) {
+                                console.error('【企业微信应用消息发送失败】', error);
+                            }
+                        });
+                    } else {
+                        console.error('【错误】获取企业微信access_token失败', data);
+                    }
+                } catch (e) {
+                    console.error('【错误】解析企业微信响应失败', e);
+                }
+            },
+            onerror: function(error) {
+                console.error('【企业微信获取token失败】', error);
             }
         });
     }
@@ -213,7 +356,7 @@
                 console.error('[自动登录] 登录超时，未检测到跳转或成功页');
                 GM_setValue('loginFailStatus', true);
                 GM_setValue('loginFailTime', Date.now());
-                pushToTelegram('课程推送登录失效提醒',
+                pushNotification('课程推送登录失效提醒',
                              `*统一身份认证登录超时*\n\n⚠️ 登录尝试超过${LOGIN_TIMEOUT/1000}秒未跳转，可能是以下原因：\n1\\. 需要短信验证码\n2\\. 账号密码错误\n3\\. 系统临时故障\n\n请手动登录检查状态\n时间：${new Date().toLocaleString()}`);
             }
         }, LOGIN_TIMEOUT);
@@ -413,7 +556,7 @@
                     });
                     return md + `\n\n_提取时间：${new Date().toLocaleString()}_`;
                 };
-                pushToTelegram(PUSH_TITLE, formatToMarkdown(newCourses));
+                pushNotification(PUSH_TITLE, formatToMarkdown(newCourses));
                 newCourses.forEach(course => pushedUniqueIds.add(course.uniqueId));
                 GM_setValue('pushedCourseUniqueIds', Array.from(pushedUniqueIds));
             } else {
@@ -454,6 +597,9 @@
 
     // 初始加载时执行一次
     handleMainLogic();
+
+    // 启动企业微信查询处理器
+    handleWeChatQuery();
 
     // 监听 hash 变化（前端路由切换时触发），重新执行主流程
     window.addEventListener('hashchange', () => {
